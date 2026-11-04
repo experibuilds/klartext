@@ -3,6 +3,7 @@ const $ = s => document.querySelector(s);
 const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
 const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
 const MAMMOTH = "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js";
+const TESSERACT = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
 const MAX_IMAGES = 5, MAX_SIDE = 1700, MAX_PDF_PAGES = 15;
 
 let items = [];          // {kind:'image'|'text', name, thumb, dataUrl?, text?}
@@ -169,23 +170,54 @@ async function analyse() {
   show("#working"); progress(0);
   timers.forEach(clearTimeout); timers = [setTimeout(() => progress(1), 1400), setTimeout(() => progress(2), 3800)];
   controller = new AbortController();
-  const kill = setTimeout(() => controller.abort("timeout"), 75_000);
+  const kill = setTimeout(() => controller.abort("timeout"), 110_000);
   try {
-    const r = await fetch("/api/analyze", {
-      method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
-      body: JSON.stringify({ name, text: original, images }),
-    });
-    let data = {}; try { data = await r.json(); } catch {}
-    if (!r.ok) throw new Error(data.error || (r.status === 413 ? "The document is too large. Use fewer pages." : `Server error (${r.status}). Try again.`));
+    let r = await post({ name, text: original, images });
+    let ocrText = "";
+    if (r.status === 503 && r.data.code === "vision_busy") {
+      // free image quota used up → read the text on this device, then send it as text
+      timers.forEach(clearTimeout);
+      const label = document.querySelector('#progress li[data-s="0"]');
+      label.textContent = "Reading the text on your device…"; progress(0);
+      ocrText = await ocr(images, pct => { label.textContent = `Reading the text on your device… ${pct}%`; });
+      if (controller.signal.aborted) throw new DOMException("aborted", "AbortError");
+      if (ocrText.replace(/\s/g, "").length < 30) throw new Error("Couldn't find readable text in the photo. Retake it flat, in good light, filling the frame.");
+      progress(1); timers = [setTimeout(() => progress(2), 2000)];
+      r = await post({ name, text: [original, ocrText].filter(Boolean).join("\n\n— — —\n\n"), images: [] });
+    }
+    if (!r.ok) throw new Error(r.data.error || (r.status === 413 ? "The document is too large. Use fewer pages." : `Server error (${r.status}). Try again.`));
     progress(3);
     await new Promise(ok => setTimeout(ok, 350));
-    current = { ...data, original };
+    current = { ...r.data, original: [original, ocrText].filter(Boolean).join("\n\n— — —\n\n") };
     renderResult(current);
   } catch (e) {
     show("#start"); renderTray();
     if (e.name === "AbortError" || e === "timeout") showError(controller.signal.reason === "timeout" ? "This took too long. Try again, or split the document into fewer pages." : "Cancelled.");
     else showError(e.message || "Network error. Check your connection.");
-  } finally { clearTimeout(kill); timers.forEach(clearTimeout); }
+  } finally {
+    clearTimeout(kill); timers.forEach(clearTimeout);
+    document.querySelector('#progress li[data-s="0"]').textContent = "Reading the document";
+  }
+}
+async function post(body) {
+  const r = await fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify(body) });
+  let data = {}; try { data = await r.json(); } catch {}
+  return { ok: r.ok, status: r.status, data };
+}
+let tess;
+async function ocr(images, onPct) {
+  if (!window.Tesseract) await loadScript(TESSERACT);
+  tess ||= await window.Tesseract.createWorker("deu", 1, {
+    logger: m => { if (m.status === "recognizing text") onPct(Math.round(((ocr.page || 0) + m.progress) / ocr.total * 100)); },
+  });
+  const out = []; ocr.total = images.length;
+  for (let i = 0; i < images.length; i++) {
+    ocr.page = i;
+    if (controller.signal.aborted) break;
+    const { data } = await tess.recognize(images[i]);
+    out.push(data.text.trim());
+  }
+  return out.join("\n\n");
 }
 
 // ---------- result ----------

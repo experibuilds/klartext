@@ -30,7 +30,10 @@ export default async function handler(req, res) {
   const prompt = buildPrompt({ today, name, text, hasImages: images.length > 0 });
 
   try {
-    const { out, rateLimited } = await callWithFallback(providers, prompt, images);
+    const vision = images.length > 0;
+    const { out, rateLimited } = await callWithFallback(providers, prompt, images, vision ? { deadline: 32_000, callMs: 20_000 } : {});
+    // Free vision quota is tiny: tell the browser to read the text itself and resend as text.
+    if (!out && vision) return res.status(503).json({ code: "vision_busy", error: "Image reading is busy. Reading the text on your device instead…" });
     if (!out) return res.status(rateLimited ? 429 : 502).json({
       error: rateLimited ? "The free AI quota is busy right now. Try again in a minute." : "The AI could not read this document. Try again or use a clearer photo.",
     });
@@ -50,8 +53,8 @@ Produce a result that is crystal clear and leaves no room for doubt:
 - "translation": complete, faithful English translation of the whole document. Do not shorten or skip anything. Keep structure: paragraph breaks as blank lines, lists as lines starting with "- ". Keep names, numbers, IBANs, reference numbers exactly.
 - "summary": 2-4 short sentences in plain English (no jargon) saying who sent it, what it is about and what it means for the reader.
 - "action_required": true only if the reader must or should do something; false for purely informational documents.
-- "actions": ordered steps the reader must take, most important first. Each step does ONE thing, starts with a verb, and includes the exact details from the document needed to do it (amount, IBAN, reference/Aktenzeichen, address, phone, which form, which documents to attach). If the document says when the reader can ignore it (e.g. "if you already paid, ignore this letter"), add that as the last step. Empty list if nothing to do.
-- "deadline": the earliest date (YYYY-MM-DD) by which something must be done, or null. If the deadline is relative (e.g. "within 2 weeks of receipt"), compute it from the document date or today and say so in "deadline_note".
+- "actions": ordered steps the reader must take, most important first. Each step does ONE thing, starts with a verb, and includes the exact details from the document needed to do it (amount, IBAN, reference/Aktenzeichen, address, phone, which form, which documents to attach). Only include steps the document actually asks for; never add generic steps. If (and only if) the document itself says the reader can ignore it in some case, put that in the detail of the related step. Empty list if nothing to do.
+- "deadline": the earliest date (YYYY-MM-DD) by which something must be done, or null. If the deadline is relative (e.g. "innerhalb von zwei Wochen nach Erhalt", "within one month of the date of this letter"), do NOT calculate it: set "deadline" to null and fill "deadline_relative" with {"basis":"receipt" or "document_date","days":number of days (1 week = 7, 1 month = 30)}; otherwise "deadline_relative" is null. "deadline_note": quote the deadline wording from the document in English, short.
 - "urgency": "high" (deadline within 14 days, money owed, legal/penalty risk), "medium", "low", or "none" (no action).
 - "consequences": what happens if the reader does nothing, only if the document says or clearly implies it; else "".
 - "key_facts": up to 8 important facts as label/value pairs (e.g. Amount due, Reference number, Contact).
@@ -60,7 +63,7 @@ When a German term matters (e.g. Säumniszuschlag, Widerspruch, Aktenzeichen), g
 Never invent information. If the document is not German, still translate it into English.
 
 Return ONLY a JSON object with exactly these keys:
-{"document_type":"short English type, with German term in parentheses if useful","sender":"","document_date":"YYYY-MM-DD or null","title":"one-line English headline, max 12 words","summary":"","action_required":true,"urgency":"high|medium|low|none","deadline":"YYYY-MM-DD or null","deadline_note":"","actions":[{"title":"","detail":"","due":"YYYY-MM-DD or null"}],"key_facts":[{"label":"","value":""}],"consequences":"","unclear":[],"translation":""}${text ? `
+{"document_type":"short English type, with German term in parentheses if useful","sender":"","document_date":"YYYY-MM-DD or null","title":"one-line English headline, max 12 words","summary":"","action_required":true,"urgency":"high|medium|low|none","deadline":"YYYY-MM-DD or null","deadline_relative":null,"deadline_note":"","actions":[{"title":"","detail":"","due":"YYYY-MM-DD or null"}],"key_facts":[{"label":"","value":""}],"consequences":"","unclear":[],"translation":""}${text ? `
 
 Document text:
 """
@@ -97,7 +100,7 @@ function openAI(name, url, key, model, extra = {}, headers = {}) {
 function buildProviders(vision) {
   const e = process.env, list = [];
   const GROQ = "https://api.groq.com/openai/v1/chat/completions", OR = "https://openrouter.ai/api/v1/chat/completions";
-  const orHeaders = { "HTTP-Referer": "https://klartext.vercel.app", "X-Title": "Klartext" };
+  const orHeaders = { "HTTP-Referer": "https://klartext-de.vercel.app", "X-Title": "Klartext" };
   if (e.GROQ_API_KEY) {
     const models = vision ? (e.GROQ_VISION_MODELS || "qwen/qwen3.8-27b") : (e.GROQ_MODELS || "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b");
     for (const m of models.split(",").map(s => s.trim()).filter(Boolean)) {
@@ -106,7 +109,7 @@ function buildProviders(vision) {
     }
   }
   if (e.OPENROUTER_API_KEY) {
-    const models = vision ? (e.OPENROUTER_VISION_MODELS || "google/gemma-4-31b-it:free,openrouter/free") : (e.OPENROUTER_MODELS || "openrouter/free");
+    const models = vision ? (e.OPENROUTER_VISION_MODELS || "google/gemma-4-31b-it:free,nvidia/nemotron-3.5-super-vl:free") : (e.OPENROUTER_MODELS || "openrouter/free");
     for (const m of models.split(",").map(s => s.trim()).filter(Boolean)) list.push(openAI("openrouter", OR, e.OPENROUTER_API_KEY, m, {}, orHeaders));
   }
   return list;
@@ -120,8 +123,8 @@ function parse(raw) {
   return out;
 }
 
-async function callWithFallback(providers, prompt, images) {
-  const end = Date.now() + DEADLINE_MS;
+async function callWithFallback(providers, prompt, images, { deadline = DEADLINE_MS, callMs = CALL_MS } = {}) {
+  const end = Date.now() + deadline;
   let rateLimited = false;
   for (const p of providers) {
     for (let attempt = 0; attempt <= RETRIES; attempt++) {
@@ -129,7 +132,7 @@ async function callWithFallback(providers, prompt, images) {
       if (left < 3000) return { out: null, rateLimited };
       try {
         const [url, init] = p.request(prompt, images);
-        const r = await fetch(url, { ...init, signal: AbortSignal.timeout(Math.min(CALL_MS, left)) });
+        const r = await fetch(url, { ...init, signal: AbortSignal.timeout(Math.min(callMs, left)) });
         if (r.ok) {
           try { const out = parse(p.text(await r.json())); console.log("served by", p.name); return { out: { ...out, _model: p.name } }; }
           catch (e) { console.error("Bad model output", p.name, e.message); }
@@ -154,6 +157,22 @@ function clean(o) {
   const actions = (Array.isArray(o.actions) ? o.actions : []).slice(0, 12).map(a =>
     typeof a === "string" ? { title: str(a, 300), detail: "", due: null } : { title: str(a.title, 300), detail: str(a.detail, 1200), due: date(a.due) }
   ).filter(a => a.title);
+  let deadline = date(o.deadline), note = str(o.deadline_note, 400);
+  const rel = o.deadline_relative, days = Math.round(Number(rel?.days));
+  if (rel && days > 0 && days < 400) {
+    const today = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
+    const docDate = date(o.document_date) ? new Date(o.document_date + "T00:00:00Z") : null;
+    let base, how;
+    if (rel.basis === "document_date" && docDate) { base = docDate; how = `${days} days after the letter date`; }
+    else {
+      const assumed = docDate ? new Date(docDate.getTime() + 3 * 864e5) : today;
+      base = assumed > today ? assumed : today;
+      how = `${days} days after you received it — estimated assuming you received it on ${base.toISOString().slice(0, 10)}${docDate && base.getTime() === today.getTime() ? " (today)" : ""}. If it arrived earlier, count from that day`;
+    }
+    const computed = new Date(base.getTime() + days * 864e5).toISOString().slice(0, 10);
+    for (const a of actions) if (!a.due || a.due === deadline) a.due = computed;
+    deadline = computed; note = `${note ? note.replace(/\.?$/, ". ") : ""}Deadline: ${how}.`;
+  }
   const urgency = ["high", "medium", "low", "none"].includes(o.urgency) ? o.urgency : (actions.length ? "medium" : "none");
   return {
     document_type: str(o.document_type, 160),
@@ -163,8 +182,8 @@ function clean(o) {
     summary: str(o.summary, 1500),
     action_required: o.action_required === true || (o.action_required !== false && actions.length > 0),
     urgency,
-    deadline: date(o.deadline),
-    deadline_note: str(o.deadline_note, 400),
+    deadline,
+    deadline_note: note,
     actions,
     key_facts: (Array.isArray(o.key_facts) ? o.key_facts : []).slice(0, 10)
       .map(f => ({ label: str(f?.label, 80), value: str(f?.value, 300) })).filter(f => f.label && f.value),
