@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Klartext — German documents in plain English</title>
+<meta name="description" content="Snap or upload any German letter or document. Get a plain-English summary, exactly what to do next, and a full translation.">
+<meta name="theme-color" content="#F6F4EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C0D10" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Klartext">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<script>try{const t=localStorage.getItem("kt-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<header class="top">
+  <a class="brand" href="/" aria-label="Klartext home">
+    <img src="/icons/icon.svg" alt="" width="30" height="30">
+    <span>Klartext</span>
+  </a>
+  <div class="top-actions">
+    <button id="installBtn" class="chip" hidden>Install app</button>
+    <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode">
+      <svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="app">
+  <!-- 1. Start -->
+  <section id="start" class="view">
+    <div class="hero">
+      <p class="eyebrow"><span class="flag" aria-hidden="true"><i></i><i></i><i></i></span> German → English</p>
+      <h1>Understand any German letter.<br><em>Know exactly what to do.</em></h1>
+      <p class="lede">Snap a photo or upload the document. You get a plain-English summary, clear next steps with deadlines, and the full translation.</p>
+    </div>
+
+    <div id="drop" class="drop card" tabindex="-1">
+      <div class="drop-empty" id="dropEmpty">
+        <div class="drop-art" aria-hidden="true">
+          <svg viewBox="0 0 64 64"><path d="M16 6h22l12 12v38a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/><path d="M38 6v12h12"/><path d="M22 30h20M22 38h20M22 46h12"/></svg>
+        </div>
+        <div class="drop-buttons">
+          <button class="btn primary big" id="cameraBtn">
+            <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+            Take a photo
+          </button>
+          <button class="btn ghost big" id="uploadBtn">
+            <svg viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>
+            Upload file
+          </button>
+        </div>
+        <p class="hint"><span class="desk">or drop files here · </span>PDF, photos (JPG, PNG, HEIC, WebP), Word, text</p>
+      </div>
+
+      <div class="tray" id="tray" hidden>
+        <div class="tray-head">
+          <strong id="trayTitle">1 page</strong>
+          <button class="link" id="clearBtn">Clear</button>
+        </div>
+        <ul class="thumbs" id="thumbs"></ul>
+        <div class="tray-actions">
+          <button class="btn ghost" id="addPageBtn">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add page
+          </button>
+          <button class="btn primary" id="goBtn">
+            Explain document
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+      <input type="file" id="fileInput" multiple hidden
+        accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.gif,.bmp,.docx,.txt,.md,.rtf,.html,.htm,.eml,.csv,.xml,application/pdf,image/*,text/*,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+    </div>
+
+    <ul class="promises">
+      <li><b>What is it?</b> Who sent it and why, in two or three sentences.</li>
+      <li><b>Do I need to act?</b> A clear yes or no, with the deadline.</li>
+      <li><b>What exactly?</b> Step-by-step, with amounts, IBANs and reference numbers.</li>
+    </ul>
+  </section>
+
+  <!-- 2. Working -->
+  <section id="working" class="view" hidden>
+    <div class="scan card">
+      <div class="scan-doc">
+        <img id="scanImg" alt="">
+        <div class="scan-lines" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="scan-beam" aria-hidden="true"></div>
+      </div>
+      <ol class="steps-progress" id="progress" aria-live="polite">
+        <li data-s="0">Reading the document</li>
+        <li data-s="1">Translating to English</li>
+        <li data-s="2">Finding what you need to do</li>
+      </ol>
+      <button class="link" id="cancelBtn">Cancel</button>
+    </div>
+  </section>
+
+  <!-- 3. Result -->
+  <section id="result" class="view" hidden>
+    <div id="verdict" class="verdict"></div>
+
+    <article class="card head-card">
+      <p class="meta" id="meta"></p>
+      <h2 id="title"></h2>
+      <p class="summary" id="summary"></p>
+    </article>
+
+    <article class="card" id="actionsCard">
+      <div class="card-head">
+        <h3>What to do</h3>
+        <span class="count" id="actionsCount"></span>
+      </div>
+      <ol class="actions" id="actions"></ol>
+      <button class="btn ghost small" id="icsBtn" hidden>
+        <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        Add deadline to calendar
+      </button>
+    </article>
+
+    <div class="callout danger" id="consequences" hidden></div>
+
+    <article class="card" id="factsCard">
+      <div class="card-head"><h3>Key details</h3><span class="count">Tap to copy</span></div>
+      <dl class="facts" id="facts"></dl>
+    </article>
+
+    <div class="callout note" id="unclear" hidden></div>
+
+    <article class="card">
+      <div class="card-head">
+        <h3>Full translation</h3>
+        <div class="seg" id="seg" hidden>
+          <button class="on" data-v="en">English</button><button data-v="de">Original</button>
+        </div>
+      </div>
+      <div class="translation collapsed" id="translation"></div>
+      <button class="link more" id="moreBtn">Show full translation</button>
+    </article>
+
+    <div class="result-bar">
+      <button class="btn ghost" id="copyBtn">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg> Copy
+      </button>
+      <button class="btn ghost" id="shareBtn" hidden>
+        <svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6"/></svg> Share
+      </button>
+      <button class="btn primary" id="newBtn">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> New document
+      </button>
+    </div>
+  </section>
+
+  <div class="error card" id="error" role="alert" hidden>
+    <strong>Couldn't read that</strong>
+    <p id="errorMsg"></p>
+    <button class="btn ghost small" id="errorBtn">Try again</button>
+  </div>
+</main>
+
+<footer class="foot">
+  <p>Nothing is stored. Files are processed once and discarded.</p>
+  <p>AI can make mistakes — double-check amounts and dates against the original.</p>
+</footer>
+
+<div class="toast" id="toast" role="status"></div>
+<div class="dropveil" id="dropveil"><div>Drop to add</div></div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

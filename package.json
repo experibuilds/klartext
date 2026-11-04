@@ -1,0 +1,8 @@
+{
+  "name": "klartext",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "German document → plain-English summary, next steps and full translation",
+  "engines": { "node": ">=20" }
+}
