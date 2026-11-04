@@ -234,7 +234,7 @@ function renderResult(d) {
   else { head = "Action required"; sub = "No fixed deadline is stated — handle it soon."; }
   $("#verdict").className = `verdict ${urg}`;
   $("#verdict").innerHTML = `<div class="badge">${act ? (urg === "high" ? ICON_ALERT : ICON_TODO) : ICON_OK}</div>
-    <div><h2>${esc(head)}</h2><p>${esc(sub)}</p>${d.deadline_note && act ? `<p class="sub">${esc(d.deadline_note)}</p>` : ""}</div>`;
+    <div><h2>${esc(head)}</h2><p>${esc(sub)}</p>${d.deadline_note && act && /Deadline:/.test(d.deadline_note) ? `<p class="sub">${esc(d.deadline_note.slice(d.deadline_note.indexOf("Deadline:")))}</p>` : ""}</div>`;
 
   const meta = [d.document_type, d.sender && `From ${d.sender}`, d.document_date && fmtDate(d.document_date)].filter(Boolean);
   $("#meta").innerHTML = meta.map(m => `<span>${esc(m)}</span>`).join("");

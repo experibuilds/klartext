@@ -142,7 +142,8 @@ h1 em { font-style: italic; font-weight: 500; background: linear-gradient(100deg
 
 .head-card h2 { font: 650 clamp(22px, 4.6vw, 28px)/1.2 var(--display); letter-spacing: -.015em; margin: 6px 0 10px; }
 .meta { margin: 0; font-size: 13px; color: var(--muted); font-weight: 500; display: flex; flex-wrap: wrap; gap: 6px 12px; }
-.meta span + span::before { content: "·"; margin-right: 12px; }
+.meta span:first-child { flex-basis: 100%; }
+.meta span + span + span::before { content: "·"; margin-right: 12px; }
 .summary { margin: 0; font-size: 17px; line-height: 1.6; }
 
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
